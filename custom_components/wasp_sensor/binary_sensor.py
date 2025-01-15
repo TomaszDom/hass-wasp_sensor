@@ -55,7 +55,7 @@ class WaspBinarySensor(BinarySensorEntity, RestoreEntity):
         """Handle added to Hass."""
         await super().async_added_to_hass()
 
-        if (state := await self.async_get_last_state()) :
+        if (state := await self.async_get_last_state()):
             _LOGGER.debug("%s: restoring state %s", self._config[CONF_NAME], state)
             self._wasp_in_box = state.attributes.get("wasp_in_box", False)
             self._box_closed = state.attributes.get("box_closed", False)
@@ -108,43 +108,45 @@ class WaspBinarySensor(BinarySensorEntity, RestoreEntity):
         )
 
     @callback
-    async def _box_sensor_change_handler(self, event: Event):
+    def _box_sensor_change_handler(self, event: Event):
         this_entity_id = event.data["entity_id"]
         new_state = event.data["new_state"].state
 
-        _LOGGER.debug(
-            "%s: %s is now %s",
-            self._config[CONF_NAME],
-            this_entity_id,
-            new_state,
-        )
-
-        await self._evaluate_box_sensors()
-        self._wasp_in_box = False
-
-        await self.async_update_ha_state()
-
-        if not self._box_closed or not self._wasp_seen:
-            return
-
-        _LOGGER.debug(
-            "%s: box is closed and wasp is seen, waiting %s seconds",
-            self._config[CONF_NAME],
-            self._config[CONF_TIMEOUT],
-        )
-
-        await asyncio.sleep(self._config[CONF_TIMEOUT])
-
-        if self._box_closed and self._wasp_seen:
+        async def _handle():
             _LOGGER.debug(
-                "%s: box is still closed and wasp is still seen after %s seconds",
+                "%s: %s is now %s",
+                self._config[CONF_NAME],
+                this_entity_id,
+                new_state,
+            )
+
+            await self._evaluate_box_sensors()
+            self._wasp_in_box = False
+
+            self.async_write_ha_state()
+
+            if not self._box_closed or not self._wasp_seen:
+                return
+
+            _LOGGER.debug(
+                "%s: box is closed and wasp is seen, waiting %s seconds",
                 self._config[CONF_NAME],
                 self._config[CONF_TIMEOUT],
             )
 
-            self._wasp_in_box = True
-            await self.async_update_ha_state()
-            return
+            await asyncio.sleep(self._config[CONF_TIMEOUT])
+
+            if self._box_closed and self._wasp_seen:
+                _LOGGER.debug(
+                    "%s: box is still closed and wasp is still seen after %s seconds",
+                    self._config[CONF_NAME],
+                    self._config[CONF_TIMEOUT],
+                )
+
+                self._wasp_in_box = True
+                self.async_write_ha_state()
+
+        asyncio.create_task(_handle())
 
     async def _evaluate_box_sensors(self):
         for this_box_sensor in self._config[CONF_BOX_SENSORS]:
@@ -165,39 +167,39 @@ class WaspBinarySensor(BinarySensorEntity, RestoreEntity):
         return
 
     @callback
-    async def _wasp_sensor_change_handler(
-        self, event: Event, expected_state: str = "on"
-    ):
+    def _wasp_sensor_change_handler(self, event: Event, expected_state: str = "on"):
         this_entity_id = event.data["entity_id"]
         new_state = event.data["new_state"].state
 
-        _LOGGER.debug(
-            "%s: waiting for %s, currently %s, for %s seconds",
-            self._config[CONF_NAME],
-            this_entity_id,
-            new_state,
-            SENSOR_CHANGE_DELAY,
-        )
+        async def _handle():
+            _LOGGER.debug(
+                "%s: waiting for %s, currently %s, for %s seconds",
+                self._config[CONF_NAME],
+                this_entity_id,
+                new_state,
+                SENSOR_CHANGE_DELAY,
+            )
 
-        # Wait; some sensors send 'on' right before 'off'
-        await asyncio.sleep(SENSOR_CHANGE_DELAY)
+            await asyncio.sleep(SENSOR_CHANGE_DELAY)
 
-        this_state = self.hass.states.get(this_entity_id).state
+            this_state = self.hass.states.get(this_entity_id).state
 
-        _LOGGER.debug(
-            "%s: %s is %s after %s seconds",
-            self._config[CONF_NAME],
-            this_entity_id,
-            this_state,
-            SENSOR_CHANGE_DELAY,
-        )
+            _LOGGER.debug(
+                "%s: %s is %s after %s seconds",
+                self._config[CONF_NAME],
+                this_entity_id,
+                this_state,
+                SENSOR_CHANGE_DELAY,
+            )
 
-        if this_state == expected_state:
-            if self._box_closed:
-                self._wasp_in_box = True
+            if this_state == expected_state:
+                if self._box_closed:
+                    self._wasp_in_box = True
 
-        await self._evaluate_wasp_sensors()
-        await self.async_update_ha_state()
+            await self._evaluate_wasp_sensors()
+            self.async_write_ha_state()
+
+        asyncio.create_task(_handle())
 
     async def _evaluate_wasp_sensors(self):
         for this_wasp_sensor in self._config[CONF_WASP_SENSORS]:
@@ -233,9 +235,6 @@ class WaspBinarySensor(BinarySensorEntity, RestoreEntity):
     def extra_state_attributes(self):
         """Return the state attributes."""
         return {
-            # "attribution": f"{DOMAIN} {BINARY_SENSOR}",
-            # "id": str(self.unique_id),
-            # "integration": DOMAIN,
             "wasp_in_box": self._wasp_in_box,
             "box_closed": self._box_closed,
             "wasp_seen": self._wasp_seen,

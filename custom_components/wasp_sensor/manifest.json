@@ -1,12 +1,13 @@
 {
   "domain": "wasp_sensor",
   "name": "Wasp Sensor",
-  "documentation": "https://github.com/dlashua/hass-wasp_sensor",
+  "documentation": "https://github.com/TomaszDom/hass-wasp_sensor",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/dlashua/hass-wasp_sensor/issues",
-  "version": "0.0.4",
+  "issue_tracker": "https://github.com/TomaszDom/hass-wasp_sensor/issues",
+  "version": "0.0.5",
   "config_flow": false,
   "codeowners": [
-    "@dlashua"
+    "@dlashua",
+    "@TomaszDom"
   ]
 }
